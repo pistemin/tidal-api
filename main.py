@@ -5,26 +5,40 @@ import tidalapi
 app = Flask(__name__)
 
 @app.route('/')
-def get_track():
+def search_tidal():
     query = request.args.get('q')
+    print(f"Prijaty dotaz: {query}") # Toto uvidite v Render Logs
+    
     if not query:
-        return "Chybí parametr q", 400
+        return jsonify({"error": "Chybi parametr q"}), 400
     
     try:
         session = tidalapi.Session()
-        # Přihlášení jako host (nevyžaduje vaše klíče)
         session.login_guest()
+        
+        # Vyhledávání
         search_result = session.search(query, models=[tidalapi.media.Track], limit=1)
         
-        if search_result['tracks']:
-            track = search_result['tracks'][0]
-            return jsonify({
-                "url": f"https://tidal.com{track.id}",
-                "id": track.id
-            })
-        return "Nenalezeno", 404
+        # Různé verze knihovny vrací výsledky různě, pojistíme to:
+        tracks = []
+        if isinstance(search_result, dict):
+            tracks = search_result.get('tracks', [])
+        else:
+            tracks = search_result.tracks
+
+        if tracks:
+            track = tracks[0]
+            track_url = f"https://tidal.com{track.id}"
+            print(f"Nalezeno: {track_url}")
+            return jsonify({"url": track_url, "id": track.id})
+        
+        return jsonify({"error": "Skladba nenalezena"}), 404
     except Exception as e:
-        return str(e), 500
+        print(f"Chyba: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    # Render vyžaduje port z prostředí (environ)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
+
